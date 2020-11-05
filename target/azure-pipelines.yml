@@ -5,16 +5,12 @@ variables:
   sonarCloudOrg: 'itsalxl'
 
 trigger:
-- main
+- challenge3
 
 pool:
   vmImage: 'ubuntu-latest'
 
 steps:
-- script: |
-    sudo curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/master/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
-  displayName: 'Get trivy'
-
 - task: SonarCloudPrepare@1
   displayName: 'Prepare Sonar'
   inputs:
@@ -50,10 +46,11 @@ steps:
       $(Build.BuildId)
       latest
 
-- task: CmdLine@2
+- script: 'sudo curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/master/contrib/install.sh | sudo sh -s -- -b /usr/local/bin'
+  displayName: 'Get trivy'
+
+- script: 'trivy image --format template --template "@templates/junit.tpl" -o junit-report-trivy.xml $(dockerImg):$(Build.BuildId)'
   displayName: 'Trivy scan'
-  inputs:
-    script: 'trivy image --format template --template "@templates/junit.tpl" -o junit-report-trivy.xml $(dockerImg):$(Build.BuildId)'
 
 - task: PublishTestResults@2
   displayName: 'Decorate with trivy'
