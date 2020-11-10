@@ -3,7 +3,7 @@ Build an Azure CI/CD pipeline for a Dockerized Spring/Node/DotNet microservice o
 
 Include a custom ruleset for SonarCloud, a quality gate to fail a build under these rules, and integrate AquaSecurity's Trivy into the pipeline to scan for docker image vulnerabilities.
 
-Only use Azure services: AKS, ACR, Azure DevOps Pipeline, Azure Repo
+Only use Azure services: AKS, ACR, Azure DevOps Pipeline, Azure DevOps Repo
 
 ## Configure Target Repo
 This pipeline expects a Gradle project with a Dockerfile already created. The target project should also have all necessary Kubernetes resource YAMLs in a `kube/` directory. Additional necessary files are located within this repo's `target/` directory; simply place the contents of `target/` in the root of the target project's repo.
@@ -59,7 +59,7 @@ The output should contain the login URL like this:
     ...
 }
 ```
-That URL should be used for the images mentioned in your Kubernetes resources (see [Configure Target Repo](#configure-target-repo))
+That URL should be used for the images in your Kubernetes resources (see [Configure Target Repo](#configure-target-repo)).
 
 ### Create AKS Cluster
 As with the ACR, there are [many optional arguments](https://docs.microsoft.com/en-us/cli/azure/aks?view=azure-cli-latest#az_aks_create) for creating an AKS cluster. For this project I went with the following:
@@ -137,7 +137,8 @@ Although it is possible to create service connections with the CLI, it is a very
 * a Docker Registry connection called `docker-cr-conn`
 * a Kubernetes connection called `kube-conn`
 * a SonarCloud connection called `sonar-conn`
-Because all of these connections are made to other Azure services, configuring them is extremely easy.
+
+Because all of these connections are made to other Azure services, configuring them should be as simple as choosing the correct resources from a dropdown.
 
 Steps to configure Slack integration can be found [here](https://docs.microsoft.com/en-us/azure/devops/pipelines/integrations/slack?view=azure-devops).
 
