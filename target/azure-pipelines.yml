@@ -1,8 +1,11 @@
 variables:
-  dockerImg: 'alxl/spring-hello-world'
+  dockerCR: 'revcogacr.azurecr.io' # Blank for Docker Hub
+  dockerImg: 'spring-hello-world'
   testKubeNS: 'revcog-test'
   prodKubeNS: 'revcog-prod'
-  sonarCloudOrg: 'itsalxl'
+  sonarCloudOrg: 'alexcavasso'
+  sonarProjKey: 'alexcavasso_revcog-azonly'
+  sonarProjName: 'revcog-azonly'
 
 trigger:
 - main
@@ -11,16 +14,15 @@ pool:
   vmImage: 'ubuntu-latest'
 
 steps:
-- script: |
-    sudo curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/master/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
-  displayName: 'Get trivy'
-
 - task: SonarCloudPrepare@1
   displayName: 'Prepare Sonar'
   inputs:
     SonarCloud: 'sonar-conn'
     organization: $(sonarCloudOrg)
     scannerMode: 'Other'
+    extraProperties: |
+      sonar.projectKey=$(sonarProjKey)
+      sonar.projectName=$(sonarProjName)
 
 - task: Gradle@2
   displayName: 'Gradle Build, Test, Sonar'
@@ -50,10 +52,11 @@ steps:
       $(Build.BuildId)
       latest
 
-- task: CmdLine@2
+- script: 'sudo curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/master/contrib/install.sh | sudo sh -s -- -b /usr/local/bin'
+  displayName: 'Get trivy'
+
+- script: 'trivy image --format template --template "@templates/junit.tpl" -o junit-report-trivy.xml $(dockerCR)/$(dockerImg):$(Build.BuildId)'
   displayName: 'Trivy scan'
-  inputs:
-    script: 'trivy image --format template --template "@templates/junit.tpl" -o junit-report-trivy.xml $(dockerImg):$(Build.BuildId)'
 
 - task: PublishTestResults@2
   displayName: 'Decorate with trivy'

@@ -3,8 +3,17 @@ Build an Azure CI/CD pipeline for a Dockerized Spring/Node/DotNet microservice o
 
 Include a custom ruleset for SonarCloud, a quality gate to fail a build under these rules, and integrate AquaSecurity's Trivy into the pipeline to scan for docker image vulnerabilities.
 
+Only use Azure services: AKS, ACR, Azure DevOps Pipeline, Azure Repo
+
 ## Configure Target Repo
 This pipeline expects a Gradle project with a Dockerfile already created. The target project should also have all necessary Kubernetes resource YAMLs in a `kube/` directory. Additional necessary files are located within this repo's `target/` directory; simply place the contents of `target/` in the root of the target project's repo.
+
+The pipeline uses an ACR to store images of the built applications. As such, be sure to change the Kubernetes resource YAMLs to point to the correct images.
+```yaml
+# using an ACR called MyACR
+image: myacr.azurecr.io/image-name:tag
+```
+The URL to use will also be obtained when the ACR is created.
 
 ## Install Azure CLI
 Follow the [official documentation](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) to install the Azure CLI for your system.
@@ -17,7 +26,7 @@ Log in to begin working:
 az login
 ```
 
-## Create AKS Cluster
+## Create Azure Resources
 ### Resource Group
 First, make a resource group using the following command:
 ```sh
@@ -34,11 +43,30 @@ Note: if you want to see available location names, use this command:
 az account list-locations --query "sort_by([].{Location:name}, &Location)" -o table
 ```
 
-### Cluster
-Now, create the cluster; there are [many optional arguments](https://docs.microsoft.com/en-us/cli/azure/aks?view=azure-cli-latest#az_aks_create) for this to meet your exact needs, but for this project I went with the following:
+### Create ACR
+If the ACR is made first, it can easily be attached to an AKS cluster when making the cluster. There are [many optional arguments](https://docs.microsoft.com/en-us/cli/azure/acr?view=azure-cli-latest#az_acr_create) to suit your exact needs or preferences. The different SKU options can be compared [here](https://azure.microsoft.com/en-us/pricing/details/container-registry/). For this project, I went with the following:
+```sh
+az acr create \
+    --name MyACR \
+    --sku Basic
+```
+
+The output should contain the login URL like this:
+```json
+{
+    ...
+    "loginServer": "myacr.azurecr.io",
+    ...
+}
+```
+That URL should be used for the images mentioned in your Kubernetes resources (see [Configure Target Repo](#configure-target-repo))
+
+### Create AKS Cluster
+As with the ACR, there are [many optional arguments](https://docs.microsoft.com/en-us/cli/azure/aks?view=azure-cli-latest#az_aks_create) for creating an AKS cluster. For this project I went with the following:
 ```sh
 az aks create \
     -n MyCluster \
+    --attach-acr MyACR \
     --node-count 1 \
     --generate-ssh-keys
 ```
@@ -47,7 +75,16 @@ Once it is finished (which can take several minutes), use the following command 
 az aks get-credentials -n MyCluster
 ```
 
-### Namespaces
+If you want to attach/detach an ACR to an already-existing AKS cluster, use the following commands:
+```sh
+# Attach
+az aks update -n MyCluster --attach-acr MyACR
+
+# Detach
+az aks update -n MyCluster --detach-acr MyACR
+```
+
+### Create Cluster Namespaces
 The pipeline expects the Kubernetes namespaces `revcog-test` and `revcog-prod` for test and production environments respectively.
 ```sh
 # Apply the namespaces from the YAML in this repo
@@ -72,6 +109,27 @@ az devops project create --name MyProjectName
 az devops configure -d project=MyProjectName
 ```
 
+## Commit Code to the Azure DevOps Repo
+Use the following command to find the remote URL for your repo:
+```sh
+az repos list
+```
+The output should contain the git remote URL like this:
+```json
+[
+    {
+        ...
+        "remoteUrl": "https://MyOrg@dev.azure.com/MyOrg/MyProject/_git/MyOrg",
+        ...
+    }
+]
+```
+Using that remote URL, you can now use git to add your project to the Azure DevOps Repo:
+```sh
+git remote add origin https://MyOrg@dev.azure.com/MyOrg/MyProject/_git/MyOrg
+git push -u origin --all
+```
+
 ## Configure Azure DevOps
 Add the SonarCloud pipeline plugin to your organization [here](https://marketplace.visualstudio.com/items?itemName=SonarSource.sonarcloud).
 
@@ -79,16 +137,18 @@ Although it is possible to create service connections with the CLI, it is a very
 * a Docker Registry connection called `docker-cr-conn`
 * a Kubernetes connection called `kube-conn`
 * a SonarCloud connection called `sonar-conn`
+Because all of these connections are made to other Azure services, configuring them is extremely easy.
 
 Steps to configure Slack integration can be found [here](https://docs.microsoft.com/en-us/azure/devops/pipelines/integrations/slack?view=azure-devops).
 
 ## Create the Pipeline
-Use the following command to create the pipeline:
+Use the following command to create the pipeline.
 ```sh
 az pipelines create \
     --name 'MyPipeline' \
     --description 'Pipeline for MyRepo' \
-    --repository https://github.com/MyOrg/MyRepo \
+    --repository MyRepoName \
+    --repository-type tfsgit \
     --branch main \
     --yml-path azure-pipelines.yml
 ```
